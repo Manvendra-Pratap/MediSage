@@ -1,88 +1,84 @@
-# Medisage - AI-Powered Prescription Decoder
+# MediSage — AI Prescription Decoder
 
-### Description
-Medisage is a web application that leverages AI-powered Optical Character Recognition (OCR) and Natural Language Processing (NLP) to help patients understand handwritten prescriptions. By extracting and deciphering key prescription details—such as medicine names, dosages, and usage instructions—Medisage provides clear explanations and suggests verified alternatives if a prescribed drug is unavailable. This innovative solution addresses common challenges like illegible handwriting, lack of medication awareness, and risks of medical errors, ultimately improving medication awareness, reducing errors, and enhancing healthcare accessibility.
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white)
+![Status](https://img.shields.io/badge/status-hackathon%20prototype-yellow)
 
-### Project Workflow
-1. __Image Processing & OCR__
-    * Load prescription image
-    * Preprocess (grayscale, thresholding, noise removal)
-    * Extract text using Tesseract OCR / EasyOCR
-    * Clean and structure extracted text
+Photograph a handwritten prescription and get back what it actually says: medicine names, price, composition, manufacturer — plus alternatives when a drug is unavailable or discontinued.
 
-2. __Medicine Name Matching__
-    * Convert dataset medicine names into a searchable format
-    * Implement fuzzy string matching for medicine identification
-    * Handle OCR spelling variations and recognition errors
+> Hackathon project, February 2025, built by a team — see [Team](#team). Prototype quality; read [Status](#status) before running it.
 
-3. __Backend API Development__
-    * Set up FastAPI for handling medicine lookup requests
-    * Implement API to process extracted medicine names
-    * Query PostgreSQL (or SQLite) database for medicine details
-    * Return:
-      * Medicine details (name, price, manufacturer, type, composition)
-      * Alternative medicines if unavailable/discontinued
-    * Optimize for fast queries and API response times
+---
 
-4. __Frontend UI Development__
-    * Design React.js UI with Tailwind CSS
-    * Implement File Upload feature for prescription images
-    * Connect UI to Backend API for medicine lookup
-    * Display:
-      * Extracted prescription text
-      * Medicine details & alternative suggestions
+## The problem
 
-5. __Integration & Testing__
-    * Connect OCR pipeline with Backend API
-    * Ensure correct data flow between frontend and backend
-    * Test with multiple handwritten prescriptions
-    * Debug UI issues, API errors, and database queries
+Handwritten prescriptions are hard to read, and a misread drug name is a patient-safety issue, not an inconvenience. Pharmacies also substitute drugs without patients knowing what the substitute contains. MediSage turns a photo into structured, checkable text.
 
-6. __Deployment & Hackathon Demo Preparation__
-    * Deploy Backend API on Render/Railway
-    * Deploy Frontend on Vercel
-    * Prepare real-world test cases for demo
-    * Finalize presentation showcasing problem, solution, and impact
+## Pipeline
 
-### Dataset Used
-* Indian Medicine Dataset
-* Doctor's Handwritten Prescription BD Dataset
+```mermaid
+flowchart LR
+    A[Prescription photo] --> B[OpenCV preprocessing<br/>grayscale · blur · edge crop]
+    B --> C[Text extraction<br/>Gemini vision]
+    C --> D[Medicine name matching<br/>Indian medicine dataset]
+    D --> E[Details + alternatives<br/>price · composition · maker]
+    E --> F[Next.js UI]
+```
 
-### Tech Stack
-__Frontend:__
-* React.js
-* Tailwind CSS
-  
-__Backend:__
-* FastAPI
-* Uvicorn
+1. **Preprocess** — the image is converted to grayscale, blurred, edge-detected and cropped to the prescription region before OCR (`scripts/ocr.py`).
+2. **Extract** — text is read out of the cleaned image and candidate medicine names are pulled from it.
+3. **Match** — names are looked up against a cleaned Indian medicine dataset of about 254,000 products (`data/indian_medicine_data_cleaned.xlsx`).
+4. **Return** — the API responds with each medicine price, pack size, composition, manufacturer, description, side effects and interactions.
 
-__OCR & Image Processing:__
-* OpenCV
-* PyTesseract
-* EasyOCR
-* Pillow
+`models/` also contains a from-scratch handwriting recognition model (residual CNN + CTC, trained on the IAM sentences dataset), the offline alternative to a hosted vision API.
 
-__NLP for Medical Advice:__
-* Hugging Face Transformers
-* BioBERT (dmis-lab/biobert-base-cased)
-  
-__Data Processing:__
-* NumPy
-* Pandas
+## Stack
 
-__Deployment:__
-* Frontend → Vercel
-* Backend → Render / Railway
-* NLP Model → Hugging Face Inference API
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui |
+| Backend | FastAPI, Uvicorn |
+| Vision / OCR | OpenCV preprocessing, Google Gemini; EasyOCR and a custom CRNN explored |
+| Data | Indian medicine dataset (~254k rows), pandas + openpyxl lookup |
 
-### Expected Deliverables
-* Fully functional web application for prescription decoding
-* AI-powered OCR to extract and structure prescription text
-* Fuzzy string matching for medicine identification
-* Medicine lookup API with alternatives and verified drug information
-* Intuitive frontend UI for user interaction
-* Optimized deployment for seamless access and fast responses
-* Comprehensive testing with real-world handwritten prescriptions
+## Run it locally
 
-Medisage aims to bridge the gap between handwritten prescriptions and accessible healthcare information, ensuring patients receive clear and accurate medication details while enhancing overall prescription management.
+**Prerequisites:** Python 3.11+, Node 18+, a Google Gemini API key.
+
+```bash
+git clone https://github.com/Manvendra-Pratap/MediSage
+cd MediSage
+
+# Backend
+pip install -r requirements.txt
+export GEMINI_API_KEY="your-key"       # see the note in Status
+uvicorn main:app --reload              # http://localhost:8000/docs
+
+# Frontend
+cd frontend
+npm install
+npm run dev                            # http://localhost:3000
+```
+
+Try the API directly:
+
+```bash
+curl -F "file=@prescription.jpg" http://localhost:8000/upload-prescription/
+```
+
+## Status
+
+Built in a hackathon weekend and not hardened since. Known issues, kept visible on purpose:
+
+- **The Gemini key is hardcoded** in `scripts/ocr.py` rather than read from the environment. It should move to `GEMINI_API_KEY`, and any key that was ever committed should be revoked and rotated.
+- **The frontend does not call the backend yet** — the UI and the API were built in parallel and never wired together.
+- **Uploads are unvalidated.** The filename from the request is used directly to build the save path, which allows directory traversal; file type and size are not checked.
+- **Matching is exact, not fuzzy.** The lookup uses an exact name match, so OCR spelling variants are missed — the fuzzy matching in the original plan is not implemented.
+- **Not a medical device.** Output is informational and must not be used to dispense or take medication.
+
+## Team
+
+Built at a hackathon by [@Mohittiwari23](https://github.com/Mohittiwari23), [@Manvendra-Pratap](https://github.com/Manvendra-Pratap), [@Priyal630](https://github.com/Priyal630) and Vaachi Gupta.
+
+This repository is a fork of the team repository [Mohittiwari23/MediSage](https://github.com/Mohittiwari23/MediSage).
